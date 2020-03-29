@@ -1,2 +1,6 @@
 from pytube import YouTube
-YouTube('https://www.youtube.com/watch?v=RFS5N_yAGTo').streams[0].download()
+import discord
+from discord.ext import commands, tasks
+yt = YouTube('https://www.youtube.com/watch?v=RFS5N_yAGTo')
+print(yt.streams.filter(audio_codec="opus"))
+#yt.streams.filter(only_audio=True).first().download()

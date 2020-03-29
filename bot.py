@@ -8,13 +8,14 @@ import urllib.request
 from bs4 import BeautifulSoup
 from pytube import YouTube
 import pickle
+import glob
+import pydub
 
 client = commands.Bot(command_prefix = '$')
 status = cycle(['Mixing Cool Tunes','Remember that', 'you can', 'request songs!'])
 
 @client.event
 async def on_ready():
-    change_status.start()
     print('Bot is ready.')
 
 @client.event
@@ -86,14 +87,16 @@ async def unban(ctx,* , member):
             return
 
 
-@tasks.loop(seconds=10)
-async def change_status():
-    await client.change_presence(activity=discord.Game(next(status)))
+#@tasks.loop(seconds=10)
+#async def change_status():
+    #await client.change_presence(activity=discord.Game(next(status)))
 
 
 
 @client.command()
 async def song(ctx, *, name):
+    global vc
+    global voice_channel
     song_id_file = open("song_counter", "rb")
     song_id = pickle.load(song_id_file)
     song_id_file.close()
@@ -113,18 +116,11 @@ async def song(ctx, *, name):
     for vid in soup.findAll(attrs={'class':'yt-uix-tile-link'}):
         urls.append('https://www.youtube.com' + vid['href'])
     endurl=urls[0]
-    #for key, value in song_dict.items():
-        #if key == endurl:
-            #song_id = song_dict[endurl]
-            #song_downloaded = True
-    ## TEMPOARY CODE
-    song_downloaded = False
-    ###
-    if song_downloaded != True:
-        yt = YouTube(urls[0])
-        print(yt.streams.filter(only_audio=True))
-        yt.streams.filter(only_audio=True).first().download(filename=str(song_id))
-   
+
+    yt = YouTube(endurl)
+    print(yt.streams.filter(audio_codec="opus"))
+    yt.streams.filter(audio_codec="opus").first().download(filename=str(song_id))
+    pydub.AudioSegment.from_file("./"+str(song_id)+".webm").export("./"+str(song_id)+".mp3", format="mp3")   
 
     if ctx.author.voice is None or ctx.author.voice.channel is None:
         return
@@ -134,11 +130,24 @@ async def song(ctx, *, name):
         vc = await voice_channel.connect()
     else:
         await ctx.voice_client.move_to(voice_channel)
-        vc = ctx.voice_client
-
-    audio_source = discord.FFmpegPCMAudio(str(song_id))
+        vc = ctx.voice_client  
+    audio_source = discord.FFmpegPCMAudio(str(song_id)+".mp3")
     vc.play(audio_source)
+    await client.change_presence(activity=discord.Game(yt.title))
     await asyncio.sleep(5)
     await vc.disconnect()
 
+@client.command
+async def pause(ctx):
+    global vc
+    global voice_channel
+    vc.pause()
+    ctx.send(f'Music paused')
+
+@client.command
+async def resume(ctx):
+    global vc
+    global voice_channel
+    vc.resume()
+    ctx.send(f'Music resumed')
 client.run('NjkzMjk0MTQ1MjQ2MDY4NzY2.Xn6_lA.KvGrdRpl4h38ZMUCa1Z4nWcVnak')
