@@ -6,9 +6,10 @@ from discord.ext import commands, tasks
 from itertools import cycle
 import urllib.request
 from bs4 import BeautifulSoup
-import youtube_dl
+from pytube import YouTube
+import pickle
 
-client = commands.Bot(command_prefix = '.')
+client = commands.Bot(command_prefix = '$')
 status = cycle(['Mixing Cool Tunes','Remember that', 'you can', 'request songs!'])
 
 @client.event
@@ -53,21 +54,8 @@ async def _8ball(ctx, *, question):
                  'Very doubtful.']
     await ctx.send(f'Question: {question}\nAnswer: {random.choice(responses)}')
 
-@client.command()
-async def song(ctx, *, name):
-    song_channel = client.get_channel(692569906935365672)
-    radio_channel = client.get_channel(692944719965192242)
-    await discord.VoiceChannel.connect(radio_channel, timeout=60.0, reconnect=True)
-    textToSearch = f'{name} clean'
-    query = urllib.parse.quote(textToSearch)
-    url = "https://www.youtube.com/results?search_query=" + query
-    response = urllib.request.urlopen(url)
-    html = response.read()
-    soup = BeautifulSoup(html, 'html.parser')
-    urls = []
-    for vid in soup.findAll(attrs={'class':'yt-uix-tile-link'}):
-        urls.append('https://www.youtube.com' + vid['href'])
-   
+
+
 
 
 
@@ -102,5 +90,55 @@ async def unban(ctx,* , member):
 async def change_status():
     await client.change_presence(activity=discord.Game(next(status)))
 
+
+
+@client.command()
+async def song(ctx, *, name):
+    song_id_file = open("song_counter", "rb")
+    song_id = pickle.load(song_id_file)
+    song_id_file.close()
+    song_id_file = open("song_counter", "wb")
+    pickle.dump(song_id+1, song_id_file)
+    song_id_file.close()
+    songs=open("songs", "rb")
+    #song_dict=pickle.load(songs)
+    songs.close()
+    textToSearch = f'{name} clean'
+    query = urllib.parse.quote(textToSearch)
+    url = "https://www.youtube.com/results?search_query=" + query
+    response = urllib.request.urlopen(url)
+    html = response.read()
+    soup = BeautifulSoup(html, 'html.parser')
+    urls = []
+    for vid in soup.findAll(attrs={'class':'yt-uix-tile-link'}):
+        urls.append('https://www.youtube.com' + vid['href'])
+    endurl=urls[0]
+    #for key, value in song_dict.items():
+        #if key == endurl:
+            #song_id = song_dict[endurl]
+            #song_downloaded = True
+    ## TEMPOARY CODE
+    song_downloaded = False
+    ###
+    if song_downloaded != True:
+        yt = YouTube(urls[0])
+        print(yt.streams.filter(only_audio=True))
+        yt.streams.filter(only_audio=True).first().download(filename=str(song_id))
+   
+
+    if ctx.author.voice is None or ctx.author.voice.channel is None:
+        return
+
+    voice_channel = ctx.author.voice.channel
+    if ctx.voice_client is None:
+        vc = await voice_channel.connect()
+    else:
+        await ctx.voice_client.move_to(voice_channel)
+        vc = ctx.voice_client
+
+    audio_source = discord.FFmpegPCMAudio(str(song_id))
+    vc.play(audio_source)
+    await asyncio.sleep(5)
+    await vc.disconnect()
 
 client.run('NjkzMjk0MTQ1MjQ2MDY4NzY2.Xn6_lA.KvGrdRpl4h38ZMUCa1Z4nWcVnak')
