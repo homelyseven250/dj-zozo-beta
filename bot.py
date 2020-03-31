@@ -10,6 +10,7 @@ from pytube import YouTube
 import pickle
 import glob
 import pydub
+import asyncio
 
 client = commands.Bot(command_prefix = '$')
 status = cycle(['Mixing Cool Tunes','Remember that', 'you can', 'request songs!'])
@@ -87,67 +88,101 @@ async def unban(ctx,* , member):
             return
 
 
-#@tasks.loop(seconds=10)
-#async def change_status():
-    #await client.change_presence(activity=discord.Game(next(status)))
+
+def next_in_queue(error):
+    global vc
+    queue_file = open("queue", "rb")
+    current_q = pickle.load(queue_file)
+    queue_file.close()
+    if current_q != []:
+        next_song=current_q.pop(0)
+        queue_file = open("queue", "wb")
+        pickle.dump(current_q, queue_file)
+        queue_file.close()
+        song_no_async(next_song)
+        
 
 
 
 @client.command()
 async def song(ctx, *, name):
+    #connect to voice channel
     global vc
-    global voice_channel
-    song_id_file = open("song_counter", "rb")
-    song_id = pickle.load(song_id_file)
-    song_id_file.close()
-    song_id_file = open("song_counter", "wb")
-    pickle.dump(song_id+1, song_id_file)
-    song_id_file.close()
-    songs=open("songs", "rb")
-    #song_dict=pickle.load(songs)
-    songs.close()
-    textToSearch = f'{name} clean'
-    query = urllib.parse.quote(textToSearch)
-    url = "https://www.youtube.com/results?search_query=" + query
-    response = urllib.request.urlopen(url)
-    html = response.read()
-    soup = BeautifulSoup(html, 'html.parser')
-    urls = []
-    for vid in soup.findAll(attrs={'class':'yt-uix-tile-link'}):
-        urls.append('https://www.youtube.com' + vid['href'])
-    endurl=urls[0]
-
-    yt = YouTube(endurl)
-    print(yt.streams.filter(audio_codec="opus"))
-    yt.streams.filter(audio_codec="opus").first().download(filename=str(song_id))
-    pydub.AudioSegment.from_file("./"+str(song_id)+".webm").export("./"+str(song_id)+".mp3", format="mp3")   
-
-    if ctx.author.voice is None or ctx.author.voice.channel is None:
-        return
-
-    voice_channel = ctx.author.voice.channel
+    voice_channel = client.get_channel(692944719965192242)
     if ctx.voice_client is None:
         vc = await voice_channel.connect()
     else:
         await ctx.voice_client.move_to(voice_channel)
-        vc = ctx.voice_client  
-    audio_source = discord.FFmpegPCMAudio(str(song_id)+".mp3")
-    vc.play(audio_source)
-    await client.change_presence(activity=discord.Game(yt.title))
-    await asyncio.sleep(5)
-    await vc.disconnect()
+        vc = ctx.voice_client 
+    song_no_async(name)
 
-@client.command
+def song_no_async(name):
+    global vc
+    #check if music is playing
+    if vc.is_playing() == False:
+        # generate id
+        song_id_file = open("song_counter", "rb")
+        song_id = pickle.load(song_id_file)
+        song_id_file.close()
+        song_id_file = open("song_counter", "wb")
+        pickle.dump(song_id+1, song_id_file)
+        song_id_file.close()
+        #locate on yt
+        textToSearch = f'{name} clean'
+        query = urllib.parse.quote(textToSearch)
+        url = "https://www.youtube.com/results?search_query=" + query
+        response = urllib.request.urlopen(url)
+        html = response.read()
+        soup = BeautifulSoup(html, 'html.parser')
+        urls = []
+        for vid in soup.findAll(attrs={'class':'yt-uix-tile-link'}):
+            urls.append('https://www.youtube.com' + vid['href'])
+        endurl=urls[0]
+
+        yt = YouTube(endurl)
+        #download opus stream and convert to mp3
+        yt.streams.filter(audio_codec="opus").first().download(filename=str(song_id))
+        pydub.AudioSegment.from_file("./"+str(song_id)+".webm").export("./"+str(song_id)+".mp3", format="mp3")   
+
+        
+        audio_source = discord.FFmpegPCMAudio(str(song_id)+".mp3")
+        vc.play(audio_source,after=next_in_queue)
+        #await client.change_presence(activity=discord.Game(yt.title))
+        print(f'Now playing: {yt.title}')
+        #await asyncio.sleep(5)
+    else:
+        queue_file = open("queue", "rb")
+        current_q = pickle.load(queue_file)
+        queue_file.close()
+        queue_file = open("queue", "wb")
+        current_q.append(name)
+        pickle.dump(current_q, queue_file)
+        queue_file.close()
+
+@client.command()
 async def pause(ctx):
     global vc
-    global voice_channel
+    voice_channel = client.get_channel(692944719965192242)
+    if ctx.voice_client is None:
+        vc = await voice_channel.connect()
+    else:
+        await ctx.voice_client.move_to(voice_channel)
+        vc = ctx.voice_client 
+    
     vc.pause()
     ctx.send(f'Music paused')
 
-@client.command
+@client.command()
 async def resume(ctx):
     global vc
-    global voice_channel
+    voice_channel = client.get_channel(692944719965192242)
+    if ctx.voice_client is None:
+        vc = await voice_channel.connect()
+    else:
+        await ctx.voice_client.move_to(voice_channel)
+        vc = ctx.voice_client 
     vc.resume()
     ctx.send(f'Music resumed')
+
+
 client.run('NjkzMjk0MTQ1MjQ2MDY4NzY2.Xn6_lA.KvGrdRpl4h38ZMUCa1Z4nWcVnak')
