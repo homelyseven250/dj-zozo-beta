@@ -11,7 +11,7 @@ import pickle
 import glob
 import pydub
 import asyncio
-
+discord_key = 'TOKEN GOES HERE'
 client = commands.Bot(command_prefix = '$')
 
 @client.event
@@ -209,4 +209,4 @@ async def resume(ctx):
     ctx.send(f'Music resumed')
 
 
-client.run('NjkzMjk0MTQ1MjQ2MDY4NzY2.Xn6_lA.KvGrdRpl4h38ZMUCa1Z4nWcVnak')
+client.run(discprd_key)
