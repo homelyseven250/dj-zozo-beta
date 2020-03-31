@@ -13,7 +13,6 @@ import pydub
 import asyncio
 
 client = commands.Bot(command_prefix = '$')
-status = cycle(['Mixing Cool Tunes','Remember that', 'you can', 'request songs!'])
 
 @client.event
 async def on_ready():
@@ -27,7 +26,7 @@ async def on_member_join(member):
 async def on_member_remove(member):
     print(f'{member} has left the server)')
 
-@client.command
+@client.command()
 async def ping(self, ctx):
         await ctx.send(f'Pong! {round(client.latency * 1000)}ms')
 
@@ -90,7 +89,6 @@ async def unban(ctx,* , member):
 
 
 def next_in_queue(error):
-    global vc
     queue_file = open("queue", "rb")
     current_q = pickle.load(queue_file)
     queue_file.close()
@@ -99,11 +97,14 @@ def next_in_queue(error):
         queue_file = open("queue", "wb")
         pickle.dump(current_q, queue_file)
         queue_file.close()
-        song_no_async(next_song)
+        play_id(next_song)
         
 
-
-
+def play_id(id):
+    global vc
+    audio_source = discord.FFmpegPCMAudio(str(id)+".mp3")
+    vc.play(audio_source,after=next_in_queue)
+    
 @client.command()
 async def song(ctx, *, name):
     #connect to voice channel
@@ -144,18 +145,41 @@ def song_no_async(name):
         yt.streams.filter(audio_codec="opus").first().download(filename=str(song_id))
         pydub.AudioSegment.from_file("./"+str(song_id)+".webm").export("./"+str(song_id)+".mp3", format="mp3")   
 
-        
-        audio_source = discord.FFmpegPCMAudio(str(song_id)+".mp3")
-        vc.play(audio_source,after=next_in_queue)
+        play_id(song_id)
         #await client.change_presence(activity=discord.Game(yt.title))
         print(f'Now playing: {yt.title}')
         #await asyncio.sleep(5)
     else:
+        # generate id
+        song_id_file = open("song_counter", "rb")
+        song_id = pickle.load(song_id_file)
+        song_id_file.close()
+        song_id_file = open("song_counter", "wb")
+        pickle.dump(song_id+1, song_id_file)
+        song_id_file.close()
+        #locate on yt
+        textToSearch = f'{name} clean'
+        query = urllib.parse.quote(textToSearch)
+        url = "https://www.youtube.com/results?search_query=" + query
+        response = urllib.request.urlopen(url)
+        html = response.read()
+        soup = BeautifulSoup(html, 'html.parser')
+        urls = []
+        for vid in soup.findAll(attrs={'class':'yt-uix-tile-link'}):
+            urls.append('https://www.youtube.com' + vid['href'])
+        endurl=urls[0]
+
+        yt = YouTube(endurl)
+        #download opus stream and convert to mp3
+        yt.streams.filter(audio_codec="opus").first().download(filename=str(song_id))
+        pydub.AudioSegment.from_file("./"+str(song_id)+".webm").export("./"+str(song_id)+".mp3", format="mp3") 
+
         queue_file = open("queue", "rb")
         current_q = pickle.load(queue_file)
+        print(current_q)
         queue_file.close()
-        queue_file = open("queue", "wb")
-        current_q.append(name)
+        current_q.append(song_id)
+        queue_file = open("queue", "wb")        
         pickle.dump(current_q, queue_file)
         queue_file.close()
 
